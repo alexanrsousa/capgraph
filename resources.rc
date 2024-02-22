@@ -1,0 +1,46 @@
+#include <windows.h>
+
+#define VER_FILEVERSION             0,1,0,0
+#define VER_FILEVERSION_STR         "0.1.0.0\0"
+
+#define VER_PRODUCTVERSION          0,1,0,0
+#define VER_PRODUCTVERSION_STR      "0.1\0"
+
+#ifndef DEBUG
+#define VER_DEBUG                   0
+#else
+#define VER_DEBUG                   VS_FF_DEBUG
+#endif
+
+LANGUAGE LANG_PORTUGUESE, SUBLANG_PORTUGUESE_BRAZILIAN
+#pragma code_page(65001)
+
+VS_VERSION_INFO VERSIONINFO
+FILEVERSION     VER_FILEVERSION
+PRODUCTVERSION  VER_PRODUCTVERSION
+FILEFLAGSMASK   VS_FFI_FILEFLAGSMASK
+FILEFLAGS       (VS_FF_PRERELEASE|VER_DEBUG)
+FILEOS          VOS__WINDOWS32
+FILETYPE        VFT_APP
+FILESUBTYPE     VFT2_UNKNOWN
+BEGIN
+    BLOCK "StringFileInfo"
+    BEGIN
+        BLOCK "040904E4"
+        BEGIN
+            VALUE "CompanyName",      "Alexandre R. Sousa"
+            VALUE "FileDescription",  "Captura cores de uma seção da tela e exporta os valores médios"
+            VALUE "FileVersion",      VER_FILEVERSION_STR
+            VALUE "InternalName",     "CapGraph"
+            VALUE "LegalCopyright",   "Copyright (C) 2024 Alexandre R. Sousa"
+            VALUE "OriginalFilename", "CapGraph.exe"
+            VALUE "ProductName",      "CapGraph"
+            VALUE "ProductVersion",   VER_PRODUCTVERSION_STR
+        END
+    END
+
+    BLOCK "VarFileInfo"
+    BEGIN
+        VALUE "Translation", LANG_PORTUGUESE, 65001
+    END
+END
