@@ -17,6 +17,7 @@ enum {
     BID_STARTREC = 101,
     TID_CAPTURE = 103,
     SID_STATUSBAR = 104,
+    LID_DATALIST = 105,
 };
 
 //--------------------------------------------------------------------------------------------
@@ -53,11 +54,26 @@ static COLORREF getAveragePixel(std::vector<uint32_t>& img1) {
     return RGB(r, g, b);
 }
 
+static const std::wstring formatCaptureItemTimestamp(const CaptureItem& item) {
+    std::wstringstream ss;
+    ss << std::setfill(L'0') << std::setw(4) << item.stTimestamp.wYear << L"-" << std::setw(2) << item.stTimestamp.wMonth << L"-"
+       << std::setw(2) << item.stTimestamp.wDay << L" " << std::setw(2) << item.stTimestamp.wHour << L":" << std::setw(2)
+       << item.stTimestamp.wMinute << L":" << std::setw(2) << item.stTimestamp.wSecond;
+    return ss.str();
+}
+
+static const std::wstring formatCaptureItemColor(const CaptureItem& item) {
+    std::wstringstream ss;
+    ss << "#" << std::setfill(L'0') << std::hex << std::uppercase << std::setw(6) << item.cAvgColor;
+    return ss.str();
+}
+
 static const std::wstring formatCaptureItem(const CaptureItem& item) {
     std::wstringstream ss;
-    ss << std::setfill(L'0') << std::setw(2) << item.stTimestamp.wYear << L"-" << item.stTimestamp.wMonth << L"-"
-       << item.stTimestamp.wDay << L" " << item.stTimestamp.wHour << L":" << item.stTimestamp.wMinute << L":"
-       << item.stTimestamp.wSecond << " - " << std::hex << std::setw(6) << item.cAvgColor;
+    ss << std::setfill(L'0') << std::setw(4) << item.stTimestamp.wYear << L"-" << std::setw(2) << item.stTimestamp.wMonth << L"-"
+       << std::setw(2) << item.stTimestamp.wDay << L" " << std::setw(2) << item.stTimestamp.wHour << L":" << std::setw(2)
+       << item.stTimestamp.wMinute << L":" << std::setw(2) << item.stTimestamp.wSecond << L" - " << std::hex << std::setw(6)
+       << std::uppercase << item.cAvgColor;
     return ss.str();
 }
 
@@ -81,19 +97,26 @@ std::shared_ptr<MainWindow> MainWindow::Create(LPCWSTR szTitle) {
 MainWindow::MainWindow(LPCWSTR szTitle)
     : hCurrentFont(NULL)
     , csCapStatus(CaptureStatus::NotStarted) {
+    // Creates the main window
     hWindow = CreateWindowExW(WS_EX_OVERLAPPEDWINDOW | WS_EX_APPWINDOW, MainWindow::szClassName, szTitle, WS_OVERLAPPEDWINDOW,
                               CW_USEDEFAULT, 0, CW_USEDEFAULT, 0, nullptr, nullptr, MainWindow::hInstance, this);
+    // Creates the child controls
     hbtnSetArea = CreateWindowW(L"BUTTON", L"Selecionar Regi\u00E3o...", BS_PUSHBUTTON | WS_CHILD | WS_VISIBLE, 0, 0, 0, 0, hWindow,
                                 (HMENU)BID_SETAREA, MainWindow::hInstance, nullptr);
     hbtnStartCapture = CreateWindowW(L"BUTTON", L"Iniciar", BS_PUSHBUTTON | WS_CHILD | WS_VISIBLE, 0, 0, 0, 0, hWindow,
                                      (HMENU)BID_STARTREC, MainWindow::hInstance, nullptr);
     hStatusBar = CreateWindowExW(0, STATUSCLASSNAMEW, nullptr, SBARS_SIZEGRIP | SBARS_TOOLTIPS | WS_VISIBLE | WS_CHILD, 0, 0, 0, 0,
                                  hWindow, (HMENU)SID_STATUSBAR, MainWindow::hInstance, nullptr);
+    hlvDataList = CreateWindowExW(0, WC_LISTVIEWW, nullptr, WS_CHILD | WS_VISIBLE | WS_BORDER | LVS_REPORT | LVS_SINGLESEL, 0, 0, 0, 0,
+                                  hWindow, (HMENU)LID_DATALIST, MainWindow::hInstance, nullptr);
     pAreaSelector = RectWindow::Create();
-
+    // Sets the list view columns
+    SetupColumns();
+    // Sets up the position of child controls
     RECT position;
-    GetWindowRect(hWindow, &position);
+    GetClientRect(hWindow, &position);
     UpdateChildrenPos(&position);
+    // Sets the font for the child controls
     UpdateFont();
 }
 
@@ -139,7 +162,7 @@ void MainWindow::DoCapture() {
     // Draws image on window
     HDC screen = GetDC(NULL);
     HDC winDc = GetDC(hWindow);
-    BitBlt(winDc, ScaleToDPI(10, dpi), ScaleToDPI(45, dpi), imWidth, imHeight, screen, area.left, area.top, SRCCOPY);
+    BitBlt(winDc, ScaleToDPI(310, dpi), ScaleToDPI(45, dpi), imWidth, imHeight, screen, area.left, area.top, SRCCOPY);
     // Reads image from screen
     HDC memDc = CreateCompatibleDC(winDc);
     HBITMAP hBitmap = CreateCompatibleBitmap(winDc, imWidth, imHeight);
@@ -174,7 +197,7 @@ void MainWindow::DoCapture() {
             FileTimeToSystemTime(&ftNow, &stUtcTimestamp);
             SystemTimeToTzSpecificLocalTime(NULL, &stUtcTimestamp, &newItem.stTimestamp);
             newItem.cAvgColor = getAveragePixel(newImage);
-            vColorItems.push_back(newItem);
+            InsertCaptureItem(newItem);
             auto statusText = formatCaptureItem(newItem);
             SendMessageW(hStatusBar, SB_SETTEXTW, 0, (LPARAM)statusText.c_str());
         }
@@ -199,20 +222,59 @@ void MainWindow::DoCapture() {
 
 void MainWindow::GetMinMaxInfo(LPMINMAXINFO minMaxInfo) {
     const auto dpi = GetDpiForWindow(hWindow);
-    LONG minWidth = ScaleToDPI(280, dpi);
-    LONG minHeight = ScaleToDPI(300, dpi);
+    LONG minWidth = ScaleToDPI(500, dpi);
+    LONG minHeight = ScaleToDPI(400, dpi);
     minMaxInfo->ptMinTrackSize.x = (std::max)(minMaxInfo->ptMinTrackSize.x, minWidth);
     minMaxInfo->ptMinTrackSize.y = (std::max)(minMaxInfo->ptMinTrackSize.y, minHeight);
+}
+
+void MainWindow::InsertCaptureItem(const CaptureItem& item) {
+    auto listSize = (int)SendMessageW(hlvDataList, LVM_GETITEMCOUNT, 0, 0);
+    auto timestamp = formatCaptureItemTimestamp(item);
+    auto color = formatCaptureItemColor(item);
+    LVITEMW lvItem;
+    lvItem.mask = LVIF_TEXT | LVIF_STATE;
+    lvItem.state = 0;
+    lvItem.stateMask = 0;
+    lvItem.iSubItem = 0;
+    lvItem.iItem = listSize;
+    lvItem.pszText = (LPWSTR)timestamp.c_str();
+    auto index = (int)SendMessageW(hlvDataList, LVM_INSERTITEMW, 0, (LPARAM)&lvItem);
+    lvItem.iSubItem = 1;
+    lvItem.iItem = index;
+    lvItem.pszText = (LPWSTR)color.c_str();
+    SendMessageW(hlvDataList, LVM_SETITEMW, 0, (LPARAM)&lvItem);
+    vColorItems.push_back(item);
+}
+
+void MainWindow::SetupColumns() {
+    const auto dpi = GetDpiForWindow(hWindow);
+    LVCOLUMNW lvColumn;
+    lvColumn.mask = LVCF_FMT | LVCF_WIDTH | LVCF_TEXT | LVCF_SUBITEM;
+    lvColumn.fmt = LVCFMT_LEFT;
+    lvColumn.cx = ScaleToDPI(150, dpi);
+    lvColumn.pszText = L"Timestamp";
+    lvColumn.iSubItem = 0;
+    SendMessageW(hlvDataList, LVM_INSERTCOLUMNW, 0, (LPARAM)&lvColumn);
+    lvColumn.cx = ScaleToDPI(100, dpi);
+    lvColumn.pszText = L"Cor M\u00E9dia";
+    lvColumn.iSubItem = 1;
+    SendMessageW(hlvDataList, LVM_INSERTCOLUMNW, 1, (LPARAM)&lvColumn);
 }
 
 void MainWindow::UpdateChildrenPos(LPRECT clientArea) {
     const auto dpi = GetDpiForWindow(hWindow);
     if (dpi) {
+        RECT statusBarPos;
+        SendMessageW(hStatusBar, WM_SIZE, 0, 0);
+        GetWindowRect(hStatusBar, &statusBarPos);
+        auto statusBarHeight = statusBarPos.bottom - statusBarPos.top;
         SetWindowPos(hbtnSetArea, NULL, ScaleToDPI(10, dpi), ScaleToDPI(10, dpi), ScaleToDPI(120, dpi), ScaleToDPI(25, dpi),
                      SWP_NOZORDER | SWP_NOACTIVATE);
         SetWindowPos(hbtnStartCapture, NULL, ScaleToDPI(140, dpi), ScaleToDPI(10, dpi), ScaleToDPI(120, dpi), ScaleToDPI(25, dpi),
                      SWP_NOZORDER | SWP_NOACTIVATE);
-        SendMessageW(hStatusBar, WM_SIZE, 0, 0);
+        SetWindowPos(hlvDataList, NULL, 0, ScaleToDPI(45, dpi), ScaleToDPI(300, dpi),
+                     clientArea->bottom - clientArea->top - statusBarHeight - ScaleToDPI(45, dpi), SWP_NOZORDER | SWP_NOACTIVATE);
     }
 }
 
@@ -261,7 +323,8 @@ LRESULT MainWindow::HandleMessage(UINT message, WPARAM wParam, LPARAM lParam) {
     case WM_WINDOWPOSCHANGED: {
         LPWINDOWPOS position = (LPWINDOWPOS)lParam;
         if ((position->flags & SWP_NOSIZE) == 0) {
-            RECT windowCoords{position->x, position->y, position->x + position->cx, position->y + position->cy};
+            RECT windowCoords;
+            GetClientRect(hWindow, &windowCoords);
             UpdateChildrenPos(&windowCoords);
         }
         break;

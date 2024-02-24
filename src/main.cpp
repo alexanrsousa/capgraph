@@ -11,7 +11,7 @@ WCHAR szTitle[] = L"CapGraph";
 void InitControls() {
     INITCOMMONCONTROLSEX init;
     init.dwSize = sizeof(INITCOMMONCONTROLSEX);
-    init.dwICC = ICC_BAR_CLASSES | ICC_STANDARD_CLASSES;
+    init.dwICC = ICC_BAR_CLASSES | ICC_STANDARD_CLASSES | ICC_LISTVIEW_CLASSES;
     InitCommonControlsEx(&init);
 }
 

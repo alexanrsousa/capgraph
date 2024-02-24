@@ -31,12 +31,16 @@ private:
     HWND hbtnSetArea;
     HWND hbtnStartCapture;
     HWND hStatusBar;
+    HWND hlvDataList;
     HFONT hCurrentFont;
     CaptureStatus csCapStatus;
 
     void SelectAreaClick();
     void ToggleCaptureClick();
     void DoCapture();
+
+    void SetupColumns();
+    void InsertCaptureItem(const CaptureItem& item);
 
     void GetMinMaxInfo(LPMINMAXINFO minMaxInfo);
     void UpdateChildrenPos(LPRECT clientArea);
