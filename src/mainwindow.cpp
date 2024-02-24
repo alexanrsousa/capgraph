@@ -1,6 +1,7 @@
 #include "mainwindow.h"
 #include <CommCtrl.h>
 #include <cmath>
+#include <fstream>
 #include <iomanip>
 #include <sstream>
 #include <string>
@@ -8,6 +9,8 @@
 
 HINSTANCE MainWindow::hInstance = NULL;
 const WCHAR MainWindow::szClassName[] = L"CapGraphMain";
+
+const uint8_t utf8BOM[] = {0xEF, 0xBB, 0xBF};
 
 constexpr int64_t FILE_TIME_TO_MILLISECONDS = 10000ll;
 constexpr int64_t STILL_IMAGE_THRESHOLD = 3000ll * FILE_TIME_TO_MILLISECONDS;
@@ -18,6 +21,8 @@ enum {
     TID_CAPTURE = 103,
     SID_STATUSBAR = 104,
     LID_DATALIST = 105,
+    BID_SAVEDATA = 106,
+    BID_CLEARDATA = 107,
 };
 
 //--------------------------------------------------------------------------------------------
@@ -54,7 +59,13 @@ static COLORREF getAveragePixel(std::vector<uint32_t>& img1) {
     return RGB(r, g, b);
 }
 
-static const std::wstring formatCaptureItemTimestamp(const CaptureItem& item) {
+static wchar_t getListDelimiter() {
+    WCHAR delimiter[4];
+    GetLocaleInfoW(LOCALE_USER_DEFAULT, LOCALE_SLIST, delimiter, 4);
+    return delimiter[0];
+}
+
+static std::wstring formatCaptureItemTimestamp(const CaptureItem& item) {
     std::wstringstream ss;
     ss << std::setfill(L'0') << std::setw(4) << item.stTimestamp.wYear << L"-" << std::setw(2) << item.stTimestamp.wMonth << L"-"
        << std::setw(2) << item.stTimestamp.wDay << L" " << std::setw(2) << item.stTimestamp.wHour << L":" << std::setw(2)
@@ -62,19 +73,34 @@ static const std::wstring formatCaptureItemTimestamp(const CaptureItem& item) {
     return ss.str();
 }
 
-static const std::wstring formatCaptureItemColor(const CaptureItem& item) {
+static std::wstring formatCaptureItemColor(const CaptureItem& item) {
     std::wstringstream ss;
     ss << "#" << std::setfill(L'0') << std::hex << std::uppercase << std::setw(6) << item.cAvgColor;
     return ss.str();
 }
 
-static const std::wstring formatCaptureItem(const CaptureItem& item) {
+static std::wstring formatCaptureItem(const CaptureItem& item) {
     std::wstringstream ss;
     ss << std::setfill(L'0') << std::setw(4) << item.stTimestamp.wYear << L"-" << std::setw(2) << item.stTimestamp.wMonth << L"-"
        << std::setw(2) << item.stTimestamp.wDay << L" " << std::setw(2) << item.stTimestamp.wHour << L":" << std::setw(2)
        << item.stTimestamp.wMinute << L":" << std::setw(2) << item.stTimestamp.wSecond << L" - " << std::hex << std::setw(6)
        << std::uppercase << item.cAvgColor;
     return ss.str();
+}
+
+std::string getUtf8(const std::wstring& wstr) {
+    if (wstr.empty())
+        return std::string();
+    int sz = WideCharToMultiByte(CP_UTF8, 0, &wstr[0], (int)wstr.size(), 0, 0, 0, 0);
+    std::string res(sz, 0);
+    WideCharToMultiByte(CP_UTF8, 0, &wstr[0], (int)wstr.size(), &res[0], sz, 0, 0);
+    return res;
+}
+
+static void writeCaptureLine(std::ofstream& file, const CaptureItem& item, std::string delimiter) {
+    file << '"' << getUtf8(formatCaptureItemTimestamp(item)) << '"' << delimiter << '"' << getUtf8(formatCaptureItemColor(item)) << '"'
+         << delimiter << (unsigned int)GetRValue(item.cAvgColor) << delimiter << (unsigned int)GetGValue(item.cAvgColor) << delimiter
+         << (unsigned int)GetBValue(item.cAvgColor) << std::endl;
 }
 
 static int64_t getFileTimeDiff(const FILETIME& ft1, const FILETIME& ft2) {
@@ -103,13 +129,21 @@ MainWindow::MainWindow(LPCWSTR szTitle)
     // Creates the child controls
     hbtnSetArea = CreateWindowW(L"BUTTON", L"Selecionar Regi\u00E3o...", BS_PUSHBUTTON | WS_CHILD | WS_VISIBLE, 0, 0, 0, 0, hWindow,
                                 (HMENU)BID_SETAREA, MainWindow::hInstance, nullptr);
-    hbtnStartCapture = CreateWindowW(L"BUTTON", L"Iniciar", BS_PUSHBUTTON | WS_CHILD | WS_VISIBLE, 0, 0, 0, 0, hWindow,
+    hbtnStartCapture = CreateWindowW(L"BUTTON", L"Iniciar", WS_DISABLED | BS_PUSHBUTTON | WS_CHILD | WS_VISIBLE, 0, 0, 0, 0, hWindow,
                                      (HMENU)BID_STARTREC, MainWindow::hInstance, nullptr);
+    hbtnClearData = CreateWindowW(L"BUTTON", L"Limpar Dados", WS_DISABLED | BS_PUSHBUTTON | WS_CHILD | WS_VISIBLE, 0, 0, 0, 0, hWindow,
+                                  (HMENU)BID_CLEARDATA, MainWindow::hInstance, nullptr);
+    hbtnSaveData = CreateWindowW(L"BUTTON", L"Salvar Dados...", WS_DISABLED | BS_PUSHBUTTON | WS_CHILD | WS_VISIBLE, 0, 0, 0, 0,
+                                 hWindow, (HMENU)BID_SAVEDATA, MainWindow::hInstance, nullptr);
     hStatusBar = CreateWindowExW(0, STATUSCLASSNAMEW, nullptr, SBARS_SIZEGRIP | SBARS_TOOLTIPS | WS_VISIBLE | WS_CHILD, 0, 0, 0, 0,
                                  hWindow, (HMENU)SID_STATUSBAR, MainWindow::hInstance, nullptr);
     hlvDataList = CreateWindowExW(0, WC_LISTVIEWW, nullptr, WS_CHILD | WS_VISIBLE | WS_BORDER | LVS_REPORT | LVS_SINGLESEL, 0, 0, 0, 0,
                                   hWindow, (HMENU)LID_DATALIST, MainWindow::hInstance, nullptr);
     pAreaSelector = RectWindow::Create();
+    pAreaSelector->OnSetCaptureRect = [this](const RECT& rect) {
+        UNREFERENCED_PARAMETER(rect);
+        EnableWindow(hbtnStartCapture, TRUE);
+    };
     // Sets the list view columns
     SetupColumns();
     // Sets up the position of child controls
@@ -130,6 +164,7 @@ void MainWindow::SelectAreaClick() {
         ToggleCaptureClick();
     }
     if (pAreaSelector) {
+        EnableWindow(hbtnStartCapture, FALSE);
         pAreaSelector->StartSelecting();
     }
 }
@@ -149,6 +184,39 @@ void MainWindow::ToggleCaptureClick() {
         SetWindowTextW(hbtnStartCapture, L"Parar");
     }
     Redraw();
+}
+void MainWindow::ClearDataClick() {
+    auto result = MessageBoxW(hWindow, L"Tem certeza que deseja limpar os dados?", L"Limpar Dados", MB_YESNO | MB_ICONWARNING);
+    if (result == IDNO) {
+        return;
+    }
+    SendMessageW(hlvDataList, LVM_DELETEALLITEMS, 0, 0);
+    vColorItems.clear();
+    EnableWindow(hbtnClearData, FALSE);
+    EnableWindow(hbtnSaveData, FALSE);
+}
+
+void MainWindow::SaveDataClick() {
+    OPENFILENAMEW ofn;
+    WCHAR szFileName[MAX_PATH] = L"";
+    ZeroMemory(&ofn, sizeof(ofn));
+    ofn.lStructSize = sizeof(ofn);
+    ofn.hwndOwner = hWindow;
+    ofn.lpstrFilter = L"Valores Separados por V\u00EDrgula (*.csv)\0*.csv\0Todos os Arquivos (*.*)\0*.*\0";
+    ofn.lpstrFile = szFileName;
+    ofn.nMaxFile = MAX_PATH;
+    ofn.Flags = OFN_EXPLORER | OFN_OVERWRITEPROMPT;
+    ofn.lpstrDefExt = L"csv";
+    if (GetSaveFileNameW(&ofn)) {
+        std::ofstream csvFile(ofn.lpstrFile);
+        const auto delimiter = getUtf8(std::wstring(1, getListDelimiter()));
+        csvFile.write((const char*)utf8BOM, 3);
+        csvFile << "Timestamp" << delimiter << "Cor" << delimiter << "R" << delimiter << "G" << delimiter << "B" << std::endl;
+        for (const auto& item : vColorItems) {
+            writeCaptureLine(csvFile, item, delimiter);
+        }
+        csvFile.close();
+    }
 }
 
 void MainWindow::DoCapture() {
@@ -245,6 +313,8 @@ void MainWindow::InsertCaptureItem(const CaptureItem& item) {
     lvItem.pszText = (LPWSTR)color.c_str();
     SendMessageW(hlvDataList, LVM_SETITEMW, 0, (LPARAM)&lvItem);
     vColorItems.push_back(item);
+    EnableWindow(hbtnClearData, TRUE);
+    EnableWindow(hbtnSaveData, TRUE);
 }
 
 void MainWindow::SetupColumns() {
@@ -273,6 +343,10 @@ void MainWindow::UpdateChildrenPos(LPRECT clientArea) {
                      SWP_NOZORDER | SWP_NOACTIVATE);
         SetWindowPos(hbtnStartCapture, NULL, ScaleToDPI(140, dpi), ScaleToDPI(10, dpi), ScaleToDPI(120, dpi), ScaleToDPI(25, dpi),
                      SWP_NOZORDER | SWP_NOACTIVATE);
+        SetWindowPos(hbtnSaveData, NULL, ScaleToDPI(280, dpi), ScaleToDPI(10, dpi), ScaleToDPI(120, dpi), ScaleToDPI(25, dpi),
+                     SWP_NOZORDER | SWP_NOACTIVATE);
+        SetWindowPos(hbtnClearData, NULL, ScaleToDPI(420, dpi), ScaleToDPI(10, dpi), ScaleToDPI(120, dpi), ScaleToDPI(25, dpi),
+                     SWP_NOZORDER | SWP_NOACTIVATE);
         SetWindowPos(hlvDataList, NULL, 0, ScaleToDPI(45, dpi), ScaleToDPI(300, dpi),
                      clientArea->bottom - clientArea->top - statusBarHeight - ScaleToDPI(45, dpi), SWP_NOZORDER | SWP_NOACTIVATE);
     }
@@ -286,6 +360,8 @@ void MainWindow::UpdateFont() {
         HFONT font = CreateFontIndirectW(&ncMetrics.lfMessageFont);
         SendMessageW(hbtnSetArea, WM_SETFONT, (WPARAM)font, TRUE);
         SendMessageW(hbtnStartCapture, WM_SETFONT, (WPARAM)font, TRUE);
+        SendMessageW(hbtnClearData, WM_SETFONT, (WPARAM)font, TRUE);
+        SendMessageW(hbtnSaveData, WM_SETFONT, (WPARAM)font, TRUE);
         if (hCurrentFont) {
             DeleteObject(hCurrentFont);
         }
@@ -311,6 +387,12 @@ LRESULT MainWindow::HandleMessage(UINT message, WPARAM wParam, LPARAM lParam) {
             return 0;
         case BID_STARTREC:
             ToggleCaptureClick();
+            return 0;
+        case BID_CLEARDATA:
+            ClearDataClick();
+            return 0;
+        case BID_SAVEDATA:
+            SaveDataClick();
             return 0;
         }
         break;

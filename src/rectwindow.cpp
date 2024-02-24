@@ -61,6 +61,9 @@ void RectWindow::EndDrag(POINT position) {
         rCaptureRect.left = rDraggingRect.right;
     }
     Show(SW_HIDE);
+    if (OnSetCaptureRect) {
+        OnSetCaptureRect(rCaptureRect);
+    }
 }
 
 void RectWindow::Paint(LPPAINTSTRUCT ps) {

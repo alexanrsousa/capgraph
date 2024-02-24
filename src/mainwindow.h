@@ -30,6 +30,8 @@ private:
     FILETIME ftLastChangedImage;
     HWND hbtnSetArea;
     HWND hbtnStartCapture;
+    HWND hbtnClearData;
+    HWND hbtnSaveData;
     HWND hStatusBar;
     HWND hlvDataList;
     HFONT hCurrentFont;
@@ -37,6 +39,8 @@ private:
 
     void SelectAreaClick();
     void ToggleCaptureClick();
+    void ClearDataClick();
+    void SaveDataClick();
     void DoCapture();
 
     void SetupColumns();
