@@ -1,6 +1,6 @@
-#include <windows.h>
-#include <CommCtrl.h>
 #include "mainwindow.h"
+#include <CommCtrl.h>
+#include <windows.h>
 
 // Global variables
 HINSTANCE hInst = 0;
@@ -8,16 +8,14 @@ RECT rcCaptureArea = {0, 0, 0, 0};
 WCHAR szRectSelWindowClass[] = L"CapGraphRectSelector";
 WCHAR szTitle[] = L"CapGraph";
 
-void InitControls() 
-{
+void InitControls() {
     INITCOMMONCONTROLSEX init;
     init.dwSize = sizeof(INITCOMMONCONTROLSEX);
     init.dwICC = ICC_BAR_CLASSES | ICC_STANDARD_CLASSES;
     InitCommonControlsEx(&init);
 }
 
-int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PWSTR pCmdLine, int nCmdShow)
-{
+int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PWSTR pCmdLine, int nCmdShow) {
     UNREFERENCED_PARAMETER(hPrevInstance);
     UNREFERENCED_PARAMETER(pCmdLine);
 
@@ -29,8 +27,7 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PWSTR pCmdLine
 
     auto mainWindow = MainWindow::Create(szTitle);
 
-    if (!mainWindow->GetHandle())
-    {
+    if (!mainWindow->GetHandle()) {
         return FALSE;
     }
 
@@ -40,8 +37,7 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PWSTR pCmdLine
     MSG msg;
 
     // Main message loop:
-    while (GetMessageW(&msg, nullptr, 0, 0))
-    {
+    while (GetMessageW(&msg, nullptr, 0, 0)) {
         TranslateMessage(&msg);
         DispatchMessageW(&msg);
     }

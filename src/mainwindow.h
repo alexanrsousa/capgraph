@@ -1,10 +1,10 @@
 #ifndef __CAPGRAPH_MAINWINDOW_H__
 #define __CAPGRAPH_MAINWINDOW_H__
-#include <windows.h>
+#include "rectwindow.h"
+#include "window.h"
 #include <memory>
 #include <vector>
-#include "window.h"
-#include "rectwindow.h"
+#include <windows.h>
 
 enum class CaptureStatus {
     NotStarted,
@@ -17,11 +17,12 @@ struct CaptureItem {
     COLORREF cAvgColor;
 };
 
-class MainWindow: public Window {
+class MainWindow : public Window {
 public:
     static std::shared_ptr<MainWindow> Create(LPCWSTR szTitle);
 
     static void Register(HINSTANCE hInstance);
+
 private:
     std::vector<CaptureItem> vColorItems;
     std::shared_ptr<RectWindow> pAreaSelector;
@@ -44,9 +45,9 @@ private:
 
     LRESULT HandleMessage(UINT message, WPARAM wParam, LPARAM lParam);
 
-    MainWindow(LPCWSTR szTitle);    
-    MainWindow (const MainWindow&) = delete;
-    MainWindow& operator= (const MainWindow&) = delete;
+    MainWindow(LPCWSTR szTitle);
+    MainWindow(const MainWindow&) = delete;
+    MainWindow& operator=(const MainWindow&) = delete;
 
     static const WCHAR szClassName[];
     static HINSTANCE hInstance;
