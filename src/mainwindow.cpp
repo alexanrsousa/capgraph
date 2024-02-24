@@ -435,12 +435,12 @@ void MainWindow::Register(HINSTANCE hInstance) {
     wcex.cbClsExtra = 0;
     wcex.cbWndExtra = 0;
     wcex.hInstance = hInstance;
-    wcex.hIcon = LoadIcon(hInstance, IDI_WINLOGO);
+    wcex.hIcon = LoadIconW(hInstance, L"MAINICON");
     wcex.hCursor = LoadCursor(nullptr, IDC_ARROW);
     wcex.hbrBackground = (HBRUSH)(COLOR_WINDOW + 1);
     wcex.lpszMenuName = NULL; // MAKEINTRESOURCEW(IDC_GDICAPTURINGANIMAGE);
     wcex.lpszClassName = MainWindow::szClassName;
-    wcex.hIconSm = LoadIcon(hInstance, IDI_WINLOGO);
+    wcex.hIconSm = LoadIconW(hInstance, L"MAINICON");
 
     RegisterClassExW(&wcex);
 }

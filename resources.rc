@@ -15,6 +15,8 @@
 LANGUAGE LANG_PORTUGUESE, SUBLANG_PORTUGUESE_BRAZILIAN
 #pragma code_page(65001)
 
+MAINICON ICON "main.ico"
+
 VS_VERSION_INFO VERSIONINFO
 FILEVERSION     VER_FILEVERSION
 PRODUCTVERSION  VER_PRODUCTVERSION
@@ -34,7 +36,7 @@ BEGIN
             VALUE "InternalName",     "CapGraph"
             VALUE "LegalCopyright",   "Copyright (C) 2024 Alexandre R. Sousa"
             VALUE "OriginalFilename", "CapGraph.exe"
-            VALUE "ProductName",      "CapGraph"
+            VALUE "ProductName",      "Ferramenta de captura de cores"
             VALUE "ProductVersion",   VER_PRODUCTVERSION_STR
         END
     END

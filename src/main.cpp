@@ -6,7 +6,7 @@
 HINSTANCE hInst = 0;
 RECT rcCaptureArea = {0, 0, 0, 0};
 WCHAR szRectSelWindowClass[] = L"CapGraphRectSelector";
-WCHAR szTitle[] = L"CapGraph";
+WCHAR szTitle[] = L"Ferramenta de captura de cores";
 
 void InitControls() {
     INITCOMMONCONTROLSEX init;
