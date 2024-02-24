@@ -22,7 +22,7 @@ enum {
 //--------------------------------------------------------------------------------------------
 // Utility functions
 //--------------------------------------------------------------------------------------------
-double compareImages(std::vector<uint32_t>& img1, std::vector<uint32_t>& img2) {
+static double compareImages(std::vector<uint32_t>& img1, std::vector<uint32_t>& img2) {
     if (img1.size() != img2.size()) {
         return 0.0;
     }
@@ -39,7 +39,7 @@ double compareImages(std::vector<uint32_t>& img1, std::vector<uint32_t>& img2) {
     return meanSquareError / (3 * img1.size());
 }
 
-COLORREF getAveragePixel(std::vector<uint32_t>& img1) {
+static COLORREF getAveragePixel(std::vector<uint32_t>& img1) {
     double r = 0, g = 0, b = 0;
     double meanSquareError = 0;
     for (size_t i = 0; i < img1.size(); i++) {
@@ -53,7 +53,7 @@ COLORREF getAveragePixel(std::vector<uint32_t>& img1) {
     return RGB(r, g, b);
 }
 
-const std::wstring formatCaptureItem(const CaptureItem& item) {
+static const std::wstring formatCaptureItem(const CaptureItem& item) {
     std::wstringstream ss;
     ss << std::setfill(L'0') << std::setw(2) << item.stTimestamp.wYear << L"-" << item.stTimestamp.wMonth << L"-"
        << item.stTimestamp.wDay << L" " << item.stTimestamp.wHour << L":" << item.stTimestamp.wMinute << L":"
@@ -61,7 +61,7 @@ const std::wstring formatCaptureItem(const CaptureItem& item) {
     return ss.str();
 }
 
-int64_t getFileTimeDiff(const FILETIME& ft1, const FILETIME& ft2) {
+static int64_t getFileTimeDiff(const FILETIME& ft1, const FILETIME& ft2) {
     ULARGE_INTEGER uli1, uli2;
     uli1.LowPart = ft1.dwLowDateTime;
     uli1.HighPart = ft1.dwHighDateTime;
