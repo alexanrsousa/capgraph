@@ -2,8 +2,20 @@
 #define __CAPGRAPH_MAINWINDOW_H__
 #include <windows.h>
 #include <memory>
+#include <vector>
 #include "window.h"
 #include "rectwindow.h"
+
+enum class CaptureStatus {
+    NotStarted,
+    WaitingStillImage,
+    StillImage,
+};
+
+struct CaptureItem {
+    SYSTEMTIME stTimestamp;
+    COLORREF cAvgColor;
+};
 
 class MainWindow: public Window {
 public:
@@ -11,12 +23,15 @@ public:
 
     static void Register(HINSTANCE hInstance);
 private:
+    std::vector<CaptureItem> vColorItems;
     std::shared_ptr<RectWindow> pAreaSelector;
+    std::vector<uint32_t> vCaptureBuffer;
+    FILETIME ftLastChangedImage;
     HWND hbtnSetArea;
     HWND hbtnStartCapture;
     HWND hStatusBar;
     HFONT hCurrentFont;
-    bool bStarted;
+    CaptureStatus csCapStatus;
 
     void SelectAreaClick();
     void ToggleCaptureClick();
