@@ -1,4 +1,5 @@
 #include "mainwindow.h"
+#include "resources.h"
 #include <CommCtrl.h>
 #include <cmath>
 #include <fstream>
@@ -13,7 +14,6 @@ const WCHAR MainWindow::szClassName[] = L"CapGraphMain";
 const uint8_t utf8BOM[] = {0xEF, 0xBB, 0xBF};
 
 constexpr int64_t FILE_TIME_TO_MILLISECONDS = 10000ll;
-constexpr int64_t STILL_IMAGE_THRESHOLD = 3000ll * FILE_TIME_TO_MILLISECONDS;
 
 enum {
     BID_SETAREA = 100,
@@ -23,6 +23,8 @@ enum {
     LID_DATALIST = 105,
     BID_SAVEDATA = 106,
     BID_CLEARDATA = 107,
+    BID_SETINTERVAL = 108,
+    TID_MAINTOOLBAR = 109,
 };
 
 //--------------------------------------------------------------------------------------------
@@ -122,28 +124,25 @@ std::shared_ptr<MainWindow> MainWindow::Create(LPCWSTR szTitle) {
 
 MainWindow::MainWindow(LPCWSTR szTitle)
     : hCurrentFont(NULL)
-    , csCapStatus(CaptureStatus::NotStarted) {
+    , csCapStatus(CaptureStatus::NotStarted)
+    , iStillImageDuration(3000) {
     // Creates the main window
     hWindow = CreateWindowExW(WS_EX_OVERLAPPEDWINDOW | WS_EX_APPWINDOW, MainWindow::szClassName, szTitle, WS_OVERLAPPEDWINDOW,
                               CW_USEDEFAULT, 0, CW_USEDEFAULT, 0, nullptr, nullptr, MainWindow::hInstance, this);
     // Creates the child controls
-    hbtnSetArea = CreateWindowW(L"BUTTON", L"Selecionar Regi\u00E3o...", BS_PUSHBUTTON | WS_CHILD | WS_VISIBLE, 0, 0, 0, 0, hWindow,
-                                (HMENU)BID_SETAREA, MainWindow::hInstance, nullptr);
-    hbtnStartCapture = CreateWindowW(L"BUTTON", L"Iniciar", WS_DISABLED | BS_PUSHBUTTON | WS_CHILD | WS_VISIBLE, 0, 0, 0, 0, hWindow,
-                                     (HMENU)BID_STARTREC, MainWindow::hInstance, nullptr);
-    hbtnClearData = CreateWindowW(L"BUTTON", L"Limpar Dados", WS_DISABLED | BS_PUSHBUTTON | WS_CHILD | WS_VISIBLE, 0, 0, 0, 0, hWindow,
-                                  (HMENU)BID_CLEARDATA, MainWindow::hInstance, nullptr);
-    hbtnSaveData = CreateWindowW(L"BUTTON", L"Salvar Dados...", WS_DISABLED | BS_PUSHBUTTON | WS_CHILD | WS_VISIBLE, 0, 0, 0, 0,
-                                 hWindow, (HMENU)BID_SAVEDATA, MainWindow::hInstance, nullptr);
     hStatusBar = CreateWindowExW(0, STATUSCLASSNAMEW, nullptr, SBARS_SIZEGRIP | SBARS_TOOLTIPS | WS_VISIBLE | WS_CHILD, 0, 0, 0, 0,
                                  hWindow, (HMENU)SID_STATUSBAR, MainWindow::hInstance, nullptr);
     hlvDataList = CreateWindowExW(0, WC_LISTVIEWW, nullptr, WS_CHILD | WS_VISIBLE | WS_BORDER | LVS_REPORT | LVS_SINGLESEL, 0, 0, 0, 0,
                                   hWindow, (HMENU)LID_DATALIST, MainWindow::hInstance, nullptr);
+    htbToolbar = CreateWindowExW(0, TOOLBARCLASSNAMEW, nullptr, WS_CHILD | WS_VISIBLE | TBSTYLE_LIST | CCS_NODIVIDER, 0, 0, 0, 0,
+                                 hWindow, (HMENU)TID_MAINTOOLBAR, MainWindow::hInstance, nullptr);
     pAreaSelector = RectWindow::Create();
     pAreaSelector->OnSetCaptureRect = [this](const RECT& rect) {
         UNREFERENCED_PARAMETER(rect);
-        EnableWindow(hbtnStartCapture, TRUE);
+        SendMessageW(htbToolbar, TB_ENABLEBUTTON, BID_STARTREC, TRUE);
     };
+    // Sets up the toolbar
+    SetupToolbar();
     // Sets the list view columns
     SetupColumns();
     // Sets up the position of child controls
@@ -164,16 +163,20 @@ void MainWindow::SelectAreaClick() {
         ToggleCaptureClick();
     }
     if (pAreaSelector) {
-        EnableWindow(hbtnStartCapture, FALSE);
+        SendMessageW(htbToolbar, TB_ENABLEBUTTON, BID_STARTREC, FALSE);
         pAreaSelector->StartSelecting();
     }
 }
 
 void MainWindow::ToggleCaptureClick() {
+    TBBUTTONINFOW tbi;
+    tbi.cbSize = sizeof(TBBUTTONINFOW);
+    tbi.dwMask = TBIF_TEXT;
     if (csCapStatus != CaptureStatus::NotStarted) {
         csCapStatus = CaptureStatus::NotStarted;
         KillTimer(hWindow, TID_CAPTURE);
-        SetWindowTextW(hbtnStartCapture, L"Iniciar");
+        tbi.pszText = L"Iniciar Captura";
+        SendMessageW(htbToolbar, TB_SETBUTTONINFOW, BID_STARTREC, (LPARAM)&tbi);
     } else if (pAreaSelector) {
         if (!pAreaSelector->HasSelectedArea()) {
             MessageBoxW(hWindow, L"Por favor selecione uma regi\u00E3o para captura", NULL, MB_OK | MB_ICONERROR);
@@ -181,7 +184,8 @@ void MainWindow::ToggleCaptureClick() {
         }
         csCapStatus = CaptureStatus::StillImage;
         SetTimer(hWindow, TID_CAPTURE, 100, NULL);
-        SetWindowTextW(hbtnStartCapture, L"Parar");
+        tbi.pszText = L"Parar Captura";
+        SendMessageW(htbToolbar, TB_SETBUTTONINFOW, BID_STARTREC, (LPARAM)&tbi);
     }
     Redraw();
 }
@@ -192,8 +196,8 @@ void MainWindow::ClearDataClick() {
     }
     SendMessageW(hlvDataList, LVM_DELETEALLITEMS, 0, 0);
     vColorItems.clear();
-    EnableWindow(hbtnClearData, FALSE);
-    EnableWindow(hbtnSaveData, FALSE);
+    SendMessageW(htbToolbar, TB_ENABLEBUTTON, BID_CLEARDATA, FALSE);
+    SendMessageW(htbToolbar, TB_ENABLEBUTTON, BID_SAVEDATA, FALSE);
 }
 
 void MainWindow::SaveDataClick() {
@@ -258,7 +262,7 @@ void MainWindow::DoCapture() {
         GetSystemTimeAsFileTime(&ftNow);
         if (imageChanged) {
             ftLastChangedImage = ftNow;
-        } else if (getFileTimeDiff(ftNow, ftLastChangedImage) > STILL_IMAGE_THRESHOLD) {
+        } else if (getFileTimeDiff(ftNow, ftLastChangedImage) > iStillImageDuration * FILE_TIME_TO_MILLISECONDS) {
             csCapStatus = CaptureStatus::StillImage;
             CaptureItem newItem;
             SYSTEMTIME stUtcTimestamp;
@@ -296,6 +300,42 @@ void MainWindow::GetMinMaxInfo(LPMINMAXINFO minMaxInfo) {
     minMaxInfo->ptMinTrackSize.y = (std::max)(minMaxInfo->ptMinTrackSize.y, minHeight);
 }
 
+void MainWindow::SetupToolbar() {
+    TBBUTTON tbButtons[5];
+    ZeroMemory(tbButtons, sizeof(tbButtons));
+
+    iToolbarTextIdx = (INT_PTR)SendMessageW(htbToolbar, TB_ADDSTRINGW, (WPARAM)MainWindow::hInstance, (LPARAM)IDS_TOOLBAR);
+
+    tbButtons[0].iBitmap = I_IMAGENONE;
+    tbButtons[0].fsState = TBSTATE_ENABLED;
+    tbButtons[0].fsStyle = BTNS_AUTOSIZE | BTNS_SHOWTEXT;
+    tbButtons[0].idCommand = BID_SETAREA;
+    tbButtons[0].iString = iToolbarTextIdx;
+    tbButtons[1].iBitmap = I_IMAGENONE;
+    tbButtons[1].fsState = 0;
+    tbButtons[1].fsStyle = BTNS_BUTTON | BTNS_SHOWTEXT;
+    tbButtons[1].idCommand = BID_STARTREC;
+    tbButtons[1].iString = iToolbarTextIdx + 1;
+    tbButtons[2].iBitmap = I_IMAGENONE;
+    tbButtons[2].fsState = 0;
+    tbButtons[2].fsStyle = BTNS_BUTTON | BTNS_SHOWTEXT;
+    tbButtons[2].idCommand = BID_SAVEDATA;
+    tbButtons[2].iString = iToolbarTextIdx + 3;
+    tbButtons[3].iBitmap = I_IMAGENONE;
+    tbButtons[3].fsState = 0;
+    tbButtons[3].fsStyle = BTNS_BUTTON | BTNS_SHOWTEXT;
+    tbButtons[3].idCommand = BID_CLEARDATA;
+    tbButtons[3].iString = iToolbarTextIdx + 4;
+    tbButtons[4].iBitmap = I_IMAGENONE;
+    tbButtons[4].fsState = TBSTATE_ENABLED;
+    tbButtons[4].fsStyle = BTNS_BUTTON | BTNS_SHOWTEXT | BTNS_WHOLEDROPDOWN;
+    tbButtons[4].idCommand = BID_SETINTERVAL;
+    tbButtons[4].iString = iToolbarTextIdx + 5;
+    SendMessageW(htbToolbar, TB_BUTTONSTRUCTSIZE, (WPARAM)sizeof(TBBUTTON), 0);
+    SendMessageW(htbToolbar, TB_ADDBUTTONS, 5, (LPARAM)&tbButtons);
+    SendMessageW(htbToolbar, TB_AUTOSIZE, 0, 0);
+}
+
 void MainWindow::InsertCaptureItem(const CaptureItem& item) {
     auto listSize = (int)SendMessageW(hlvDataList, LVM_GETITEMCOUNT, 0, 0);
     auto timestamp = formatCaptureItemTimestamp(item);
@@ -313,8 +353,8 @@ void MainWindow::InsertCaptureItem(const CaptureItem& item) {
     lvItem.pszText = (LPWSTR)color.c_str();
     SendMessageW(hlvDataList, LVM_SETITEMW, 0, (LPARAM)&lvItem);
     vColorItems.push_back(item);
-    EnableWindow(hbtnClearData, TRUE);
-    EnableWindow(hbtnSaveData, TRUE);
+    SendMessageW(htbToolbar, TB_ENABLEBUTTON, BID_CLEARDATA, TRUE);
+    SendMessageW(htbToolbar, TB_ENABLEBUTTON, BID_SAVEDATA, TRUE);
 }
 
 void MainWindow::SetupColumns() {
@@ -339,21 +379,13 @@ void MainWindow::UpdateChildrenPos(LPRECT clientArea) {
         SendMessageW(hStatusBar, WM_SIZE, 0, 0);
         GetWindowRect(hStatusBar, &statusBarPos);
         auto statusBarHeight = statusBarPos.bottom - statusBarPos.top;
-        SetWindowPos(hbtnSetArea, NULL, ScaleToDPI(10, dpi), ScaleToDPI(10, dpi), ScaleToDPI(120, dpi), ScaleToDPI(25, dpi),
-                     SWP_NOZORDER | SWP_NOACTIVATE);
-        SetWindowPos(hbtnStartCapture, NULL, ScaleToDPI(140, dpi), ScaleToDPI(10, dpi), ScaleToDPI(120, dpi), ScaleToDPI(25, dpi),
-                     SWP_NOZORDER | SWP_NOACTIVATE);
-        SetWindowPos(hbtnSaveData, NULL, ScaleToDPI(280, dpi), ScaleToDPI(10, dpi), ScaleToDPI(120, dpi), ScaleToDPI(25, dpi),
-                     SWP_NOZORDER | SWP_NOACTIVATE);
-        SetWindowPos(hbtnClearData, NULL, ScaleToDPI(420, dpi), ScaleToDPI(10, dpi), ScaleToDPI(120, dpi), ScaleToDPI(25, dpi),
-                     SWP_NOZORDER | SWP_NOACTIVATE);
         SetWindowPos(hlvDataList, NULL, 0, ScaleToDPI(45, dpi), ScaleToDPI(300, dpi),
                      clientArea->bottom - clientArea->top - statusBarHeight - ScaleToDPI(45, dpi), SWP_NOZORDER | SWP_NOACTIVATE);
     }
 }
 
 void MainWindow::UpdateFont() {
-    const auto dpi = GetDpiForWindow(hWindow);
+    /*const auto dpi = GetDpiForWindow(hWindow);
     NONCLIENTMETRICSW ncMetrics;
     ncMetrics.cbSize = sizeof(ncMetrics);
     if (SystemParametersInfoForDpi(SPI_GETNONCLIENTMETRICS, sizeof(ncMetrics), &ncMetrics, 0, dpi)) {
@@ -366,7 +398,7 @@ void MainWindow::UpdateFont() {
             DeleteObject(hCurrentFont);
         }
         hCurrentFont = font;
-    }
+    }*/
 }
 
 void MainWindow::DestroyCleanup() {
@@ -394,6 +426,67 @@ LRESULT MainWindow::HandleMessage(UINT message, WPARAM wParam, LPARAM lParam) {
         case BID_SAVEDATA:
             SaveDataClick();
             return 0;
+        case IDM_STILL_DURATION_05:
+            iStillImageDuration = 500;
+            return 0;
+        case IDM_STILL_DURATION_10:
+            iStillImageDuration = 1000;
+            return 0;
+        case IDM_STILL_DURATION_20:
+            iStillImageDuration = 2000;
+            return 0;
+        case IDM_STILL_DURATION_40:
+            iStillImageDuration = 4000;
+            return 0;
+        case IDM_STILL_DURATION_50:
+            iStillImageDuration = 5000;
+            return 0;
+        case IDM_STILL_DURATION_100:
+            iStillImageDuration = 10000;
+            return 0;
+        }
+        break;
+    }
+    case WM_NOTIFY: {
+        LPNMHDR nmhdr = (LPNMHDR)lParam;
+        if (nmhdr->idFrom == TID_MAINTOOLBAR && nmhdr->code == TBN_DROPDOWN) {
+            LPNMTOOLBARW nmtb = (LPNMTOOLBARW)lParam;
+            RECT buttonRect;
+            SendMessage(nmtb->hdr.hwndFrom, TB_GETRECT, (WPARAM)nmtb->iItem, (LPARAM)&buttonRect);
+            MapWindowPoints(nmtb->hdr.hwndFrom, HWND_DESKTOP, (LPPOINT)&buttonRect, 2);
+            HMENU hMenuLoaded = LoadMenuW(MainWindow::hInstance, MAKEINTRESOURCEW(IDM_STILL_DURATION));
+            HMENU hPopupMenu = GetSubMenu(hMenuLoaded, 0);
+            TPMPARAMS tpm;
+            tpm.cbSize = sizeof(TPMPARAMS);
+            tpm.rcExclude = buttonRect;
+            switch (iStillImageDuration) {
+            case 500:
+                CheckMenuItem(hPopupMenu, IDM_STILL_DURATION_05, MF_BYCOMMAND | MF_CHECKED);
+                break;
+            case 1000:
+                CheckMenuItem(hPopupMenu, IDM_STILL_DURATION_10, MF_BYCOMMAND | MF_CHECKED);
+                break;
+            case 2000:
+                CheckMenuItem(hPopupMenu, IDM_STILL_DURATION_20, MF_BYCOMMAND | MF_CHECKED);
+                break;
+            case 3000:
+                CheckMenuItem(hPopupMenu, IDM_STILL_DURATION_30, MF_BYCOMMAND | MF_CHECKED);
+                break;
+            case 4000:
+                CheckMenuItem(hPopupMenu, IDM_STILL_DURATION_40, MF_BYCOMMAND | MF_CHECKED);
+                break;
+            case 5000:
+                CheckMenuItem(hPopupMenu, IDM_STILL_DURATION_50, MF_BYCOMMAND | MF_CHECKED);
+                break;
+            case 10000:
+                CheckMenuItem(hPopupMenu, IDM_STILL_DURATION_100, MF_BYCOMMAND | MF_CHECKED);
+                break;
+            }
+            CheckMenuItem(hPopupMenu, IDM_STILL_DURATION_05, MF_BYCOMMAND | (iStillImageDuration == 500 ? MF_CHECKED : MF_UNCHECKED));
+            TrackPopupMenuEx(hPopupMenu, TPM_LEFTALIGN | TPM_LEFTBUTTON | TPM_VERTICAL, buttonRect.left, buttonRect.bottom, hWindow,
+                             &tpm);
+
+            DestroyMenu(hMenuLoaded);
         }
         break;
     }
@@ -435,12 +528,12 @@ void MainWindow::Register(HINSTANCE hInstance) {
     wcex.cbClsExtra = 0;
     wcex.cbWndExtra = 0;
     wcex.hInstance = hInstance;
-    wcex.hIcon = LoadIconW(hInstance, L"MAINICON");
+    wcex.hIcon = LoadIconW(hInstance, MAKEINTRESOURCEW(IDI_CAPGRAPH));
     wcex.hCursor = LoadCursor(nullptr, IDC_ARROW);
     wcex.hbrBackground = (HBRUSH)(COLOR_WINDOW + 1);
     wcex.lpszMenuName = NULL; // MAKEINTRESOURCEW(IDC_GDICAPTURINGANIMAGE);
     wcex.lpszClassName = MainWindow::szClassName;
-    wcex.hIconSm = LoadIconW(hInstance, L"MAINICON");
+    wcex.hIconSm = LoadIconW(hInstance, MAKEINTRESOURCEW(IDI_CAPGRAPH));
 
     RegisterClassExW(&wcex);
 }

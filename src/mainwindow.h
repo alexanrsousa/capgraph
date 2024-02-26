@@ -28,14 +28,13 @@ private:
     std::shared_ptr<RectWindow> pAreaSelector;
     std::vector<uint32_t> vCaptureBuffer;
     FILETIME ftLastChangedImage;
-    HWND hbtnSetArea;
-    HWND hbtnStartCapture;
-    HWND hbtnClearData;
-    HWND hbtnSaveData;
     HWND hStatusBar;
     HWND hlvDataList;
+    HWND htbToolbar;
     HFONT hCurrentFont;
     CaptureStatus csCapStatus;
+    INT_PTR iToolbarTextIdx;
+    int64_t iStillImageDuration;
 
     void SelectAreaClick();
     void ToggleCaptureClick();
@@ -43,6 +42,7 @@ private:
     void SaveDataClick();
     void DoCapture();
 
+    void SetupToolbar();
     void SetupColumns();
     void InsertCaptureItem(const CaptureItem& item);
 

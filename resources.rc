@@ -1,4 +1,5 @@
 #include <windows.h>
+#include "src/resources.h"
 
 #define VER_FILEVERSION             0,1,0,0
 #define VER_FILEVERSION_STR         "0.1.0.0\0"
@@ -15,7 +16,26 @@
 LANGUAGE LANG_PORTUGUESE, SUBLANG_PORTUGUESE_BRAZILIAN
 #pragma code_page(65001)
 
-MAINICON ICON "main.ico"
+IDI_CAPGRAPH ICON "main.ico"
+
+STRINGTABLE
+{
+    IDS_TOOLBAR, "~Selecionar Área~Iniciar Captura~Parar Captura~Salvar Dados~Limpar Dados~Tempo de Imagem~~"
+}
+
+IDM_STILL_DURATION MENU
+{
+    POPUP "Intervalo"
+    {
+        MENUITEM "0.5s", IDM_STILL_DURATION_05
+        MENUITEM "1s", IDM_STILL_DURATION_10
+        MENUITEM "2s", IDM_STILL_DURATION_20
+        MENUITEM "3s", IDM_STILL_DURATION_30
+        MENUITEM "4s", IDM_STILL_DURATION_40
+        MENUITEM "5s", IDM_STILL_DURATION_50
+        MENUITEM "10s", IDM_STILL_DURATION_100
+    }
+}
 
 VS_VERSION_INFO VERSIONINFO
 FILEVERSION     VER_FILEVERSION
