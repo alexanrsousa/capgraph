@@ -18,5 +18,6 @@ set(SOURCE_FILES
     src/window.h
 )
 
+set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>" CACHE INTERNAL "")
 add_executable(${CMAKE_PROJECT_NAME} WIN32 ${SOURCE_FILES})
 target_link_libraries(${CMAKE_PROJECT_NAME} PUBLIC comctl32.lib)
