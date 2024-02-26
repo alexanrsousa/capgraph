@@ -43,6 +43,7 @@ private:
     void DoCapture();
 
     void SetupToolbar();
+    void SetupToolbarImages();
     void SetupColumns();
     void InsertCaptureItem(const CaptureItem& item);
 

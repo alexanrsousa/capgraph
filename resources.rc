@@ -16,7 +16,13 @@
 LANGUAGE LANG_PORTUGUESE, SUBLANG_PORTUGUESE_BRAZILIAN
 #pragma code_page(65001)
 
-IDI_CAPGRAPH ICON "main.ico"
+IDI_CAPGRAPH ICON "res/main.ico"
+IDI_SELECT_AREA ICON "res/select-area-icon.ico"
+IDI_START_CAPTURE ICON "res/play-icon.ico"
+IDI_STOP_CAPTURE ICON "res/pause-icon.ico"
+IDI_SAVE_DATA ICON "res/save-icon.ico"
+IDI_CLEAR_DATA ICON "res/eraser-icon.ico"
+IDI_STILL_DURATION ICON "res/clock-icon.ico"
 
 STRINGTABLE
 {

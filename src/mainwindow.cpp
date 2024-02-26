@@ -134,7 +134,7 @@ MainWindow::MainWindow(LPCWSTR szTitle)
                                  hWindow, (HMENU)SID_STATUSBAR, MainWindow::hInstance, nullptr);
     hlvDataList = CreateWindowExW(0, WC_LISTVIEWW, nullptr, WS_CHILD | WS_VISIBLE | WS_BORDER | LVS_REPORT | LVS_SINGLESEL, 0, 0, 0, 0,
                                   hWindow, (HMENU)LID_DATALIST, MainWindow::hInstance, nullptr);
-    htbToolbar = CreateWindowExW(0, TOOLBARCLASSNAMEW, nullptr, WS_CHILD | WS_VISIBLE | TBSTYLE_LIST | CCS_NODIVIDER, 0, 0, 0, 0,
+    htbToolbar = CreateWindowExW(0, TOOLBARCLASSNAMEW, nullptr, WS_CHILD | WS_VISIBLE | TBSTYLE_FLAT | CCS_NODIVIDER, 0, 0, 0, 0,
                                  hWindow, (HMENU)TID_MAINTOOLBAR, MainWindow::hInstance, nullptr);
     pAreaSelector = RectWindow::Create();
     pAreaSelector->OnSetCaptureRect = [this](const RECT& rect) {
@@ -143,6 +143,7 @@ MainWindow::MainWindow(LPCWSTR szTitle)
     };
     // Sets up the toolbar
     SetupToolbar();
+    SetupToolbarImages();
     // Sets the list view columns
     SetupColumns();
     // Sets up the position of child controls
@@ -171,10 +172,11 @@ void MainWindow::SelectAreaClick() {
 void MainWindow::ToggleCaptureClick() {
     TBBUTTONINFOW tbi;
     tbi.cbSize = sizeof(TBBUTTONINFOW);
-    tbi.dwMask = TBIF_TEXT;
+    tbi.dwMask = TBIF_TEXT | TBIF_IMAGE;
     if (csCapStatus != CaptureStatus::NotStarted) {
         csCapStatus = CaptureStatus::NotStarted;
         KillTimer(hWindow, TID_CAPTURE);
+        tbi.iImage = MAKELONG(1, 0);
         tbi.pszText = L"Iniciar Captura";
         SendMessageW(htbToolbar, TB_SETBUTTONINFOW, BID_STARTREC, (LPARAM)&tbi);
     } else if (pAreaSelector) {
@@ -184,6 +186,7 @@ void MainWindow::ToggleCaptureClick() {
         }
         csCapStatus = CaptureStatus::StillImage;
         SetTimer(hWindow, TID_CAPTURE, 100, NULL);
+        tbi.iImage = MAKELONG(2, 0);
         tbi.pszText = L"Parar Captura";
         SendMessageW(htbToolbar, TB_SETBUTTONINFOW, BID_STARTREC, (LPARAM)&tbi);
     }
@@ -306,27 +309,27 @@ void MainWindow::SetupToolbar() {
 
     iToolbarTextIdx = (INT_PTR)SendMessageW(htbToolbar, TB_ADDSTRINGW, (WPARAM)MainWindow::hInstance, (LPARAM)IDS_TOOLBAR);
 
-    tbButtons[0].iBitmap = I_IMAGENONE;
+    tbButtons[0].iBitmap = MAKELONG(0, 0);
     tbButtons[0].fsState = TBSTATE_ENABLED;
     tbButtons[0].fsStyle = BTNS_AUTOSIZE | BTNS_SHOWTEXT;
     tbButtons[0].idCommand = BID_SETAREA;
     tbButtons[0].iString = iToolbarTextIdx;
-    tbButtons[1].iBitmap = I_IMAGENONE;
+    tbButtons[1].iBitmap = MAKELONG(1, 0);
     tbButtons[1].fsState = 0;
     tbButtons[1].fsStyle = BTNS_BUTTON | BTNS_SHOWTEXT;
     tbButtons[1].idCommand = BID_STARTREC;
     tbButtons[1].iString = iToolbarTextIdx + 1;
-    tbButtons[2].iBitmap = I_IMAGENONE;
+    tbButtons[2].iBitmap = MAKELONG(3, 0);
     tbButtons[2].fsState = 0;
     tbButtons[2].fsStyle = BTNS_BUTTON | BTNS_SHOWTEXT;
     tbButtons[2].idCommand = BID_SAVEDATA;
     tbButtons[2].iString = iToolbarTextIdx + 3;
-    tbButtons[3].iBitmap = I_IMAGENONE;
+    tbButtons[3].iBitmap = MAKELONG(4, 0);
     tbButtons[3].fsState = 0;
     tbButtons[3].fsStyle = BTNS_BUTTON | BTNS_SHOWTEXT;
     tbButtons[3].idCommand = BID_CLEARDATA;
     tbButtons[3].iString = iToolbarTextIdx + 4;
-    tbButtons[4].iBitmap = I_IMAGENONE;
+    tbButtons[4].iBitmap = MAKELONG(5, 0);
     tbButtons[4].fsState = TBSTATE_ENABLED;
     tbButtons[4].fsStyle = BTNS_BUTTON | BTNS_SHOWTEXT | BTNS_WHOLEDROPDOWN;
     tbButtons[4].idCommand = BID_SETINTERVAL;
@@ -334,6 +337,24 @@ void MainWindow::SetupToolbar() {
     SendMessageW(htbToolbar, TB_BUTTONSTRUCTSIZE, (WPARAM)sizeof(TBBUTTON), 0);
     SendMessageW(htbToolbar, TB_ADDBUTTONS, 5, (LPARAM)&tbButtons);
     SendMessageW(htbToolbar, TB_AUTOSIZE, 0, 0);
+}
+
+void MainWindow::SetupToolbarImages() {
+    auto dpi = GetDpiForWindow(hWindow);
+    auto size = ScaleToDPI(24, dpi);
+    const int iconIds[6] = {IDI_SELECT_AREA, IDI_START_CAPTURE, IDI_STOP_CAPTURE, IDI_SAVE_DATA, IDI_CLEAR_DATA, IDI_STILL_DURATION};
+    HIMAGELIST hImageList = ImageList_Create(size, size, ILC_COLOR32, 0, 0);
+    for (int i = 0; i < 6; i++) {
+        HICON hIcon = (HICON)LoadImageW(MainWindow::hInstance, MAKEINTRESOURCEW(iconIds[i]), IMAGE_ICON, size, size, LR_DEFAULTCOLOR);
+        ImageList_AddIcon(hImageList, hIcon);
+        DestroyIcon(hIcon);
+    }
+    auto oldList = SendMessageW(htbToolbar, TB_SETIMAGELIST, 0, (LPARAM)hImageList);
+    SendMessageW(htbToolbar, TB_SETBITMAPSIZE, 0, MAKELPARAM(size, size));
+    SendMessageW(htbToolbar, TB_AUTOSIZE, 0, 0);
+    if (oldList) {
+        DeleteObject((HIMAGELIST)oldList);
+    }
 }
 
 void MainWindow::InsertCaptureItem(const CaptureItem& item) {
